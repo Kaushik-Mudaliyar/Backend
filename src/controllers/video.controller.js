@@ -137,8 +137,8 @@ const updateVideo = asyncHandler(async (req, res) => {
   // }
 
   // update the new thumbnail, title and description in the db
-  const video = await Video.findByIdAndUpdate(
-    videoId,
+  const video = await Video.findOneAndUpdate(
+    { _id: videoId, owner: req.user?._id },
     {
       $set: {
         title,
@@ -185,7 +185,13 @@ const deleteVideo = asyncHandler(async (req, res) => {
     console.log("Old video file deleted successfully");
   }
   // delete the whole video in the db
-  await Video.findByIdAndDelete(videoId);
+  const deletedVideo = await Video.findOneAndDelete({
+    _id: videoId,
+    owner: req.user?._id,
+  });
+  if (!deletedVideo) {
+    throw new ApiError(400, "Error while deleting the video");
+  }
 
   return res
     .status(200)
