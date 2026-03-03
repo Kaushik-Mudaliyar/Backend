@@ -189,8 +189,33 @@ const deletePlaylist = asyncHandler(async (req, res) => {
 
 const updatePlaylist = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
-  const { name, description } = req.body;
+  const { name, description, visibility } = req.body;
   //TODO: update playlist
+  if (!isValidObjectId(playlistId)) {
+    throw new ApiError(400, "Invalid playlist id");
+  }
+  if (!name.trim() || !description.trim() || !visibility) {
+    throw new ApiError(400, "Name, description and visibility are required");
+  }
+  const updatedPlaylist = await Playlist.findOneAndUpdate(
+    {
+      _id: playlistId,
+      owner: req.user._id,
+    },
+    {
+      name,
+      description,
+      visibility,
+    },
+    {
+      new: true,
+    }
+  );
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, updatedPlaylist, "Playlist updated successfully")
+    );
 });
 
 export {
