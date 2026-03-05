@@ -6,8 +6,68 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 const getVideoComments = asyncHandler(async (req, res) => {
   //TODO: get all comments for a video
+  // check if videoId is a valid object id or not
+  // apply aggregation pipeline to the comment
+  // get the comments of using videoId. use match operator
+  // we get all the comments now, so sort the comments like the one whose comment is latest will comes first
+  // we need to find skip that how many documents we need to skip in each pagination
+  // formula for skip = (page-1)*limit
+  // after that apply limit operator, it makes sure that all the comments will not load at once, it will come in batches like first 10 comments will be shown then next 10 like that.
+  // Now as we know the frontend needs some information about the user as well and we had stored only the id in the db
+  // so now we lookup to user model and then unwind the details to get the details inside an object because by default it will give an array
+  // after that we project the needed info
+  // and then return the response to the user
   const { videoId } = req.params;
-  const { page = 1, limit = 10 } = req.query;
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid Video Id");
+  }
+
+  const videoComments = await Comment.aggregate([
+    {
+      $match: {
+        video: new mongoose.Types.ObjectId(videoId),
+      },
+    },
+    {
+      $sort: { createdAt: -1 },
+    },
+    {
+      $skip: (page - 1) * limit,
+    },
+    {
+      $limit: limit,
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "owner",
+      },
+    },
+    {
+      $unwind: "$owner",
+    },
+    {
+      $project: {
+        content: 1,
+        createdAt: 1,
+        ownerId: "$owner._id",
+        username: "$owner.username",
+        fullName: "$owner.fullName",
+        avatar: "$owner.avatar",
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, videoComments, "Fetched video comments successfully")
+    );
 });
 
 const addComment = asyncHandler(async (req, res) => {
