@@ -55,9 +55,6 @@ const toggleSubscription = asyncHandler(async (req, res) => {
       subscriber: subscriberId,
       channel: channelId,
     });
-    if (!createSubscription) {
-      throw new ApiError(400, "Error while creating the subscription");
-    }
     Subscribed = true;
     message = "Subscribed Successfully";
   }
