@@ -7,8 +7,70 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary, deleteOnCloudinary } from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
+  const { query, sortBy = "createdAt", sortType = "desc", userId } = req.query;
   //TODO: get all videos based on query, sort, pagination
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+
+  const matchCondition = {
+    isPublished: true,
+  };
+  if (userId && isValidObjectId(userId)) {
+    matchCondition.owner = new mongoose.Types.ObjectId(userId);
+  }
+  if (query) {
+    matchCondition.$or = [
+      // we use regex to search a title's text like title:"React tutorial" then using regex if the query is react then also it get's the video which has title:"React tutorial"
+      // the options : "i" is to deactivate case sensitive of a title like if the title is React and we pass the search react then also it get's the video with title "React"
+      { title: { $regex: query, $options: "i" } },
+      { description: { $regex: query, $options: "i" } },
+    ];
+  }
+
+  const videos = await Video.aggregate([
+    {
+      $match: matchCondition,
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "owner",
+      },
+    },
+    {
+      $unwind: "$owner",
+    },
+    {
+      $sort: {
+        [sortBy]: sortType === "asc" ? 1 : -1,
+      },
+    },
+    {
+      $skip: (page - 1) * limit,
+    },
+    {
+      $limit: limit,
+    },
+
+    {
+      $project: {
+        title: 1,
+        description: 1,
+        thumbnail: 1,
+        videoFile: 1,
+        views: 1,
+        createdAt: 1,
+        username: "$owner.username",
+        avatar: "$owner.avatar",
+        fullName: "$owner.fullName",
+      },
+    },
+  ]);
+  return res
+    .status(200)
+    .json(new ApiResponse(200, videos, "Fetched all videos successfully"));
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
