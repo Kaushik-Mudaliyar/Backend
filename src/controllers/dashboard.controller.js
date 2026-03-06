@@ -58,17 +58,28 @@ const getChannelStats = asyncHandler(async (req, res) => {
   const totalLikes = likes[0]?.totalLikes || 0;
 
   return res.status(200).json(
-    new ApiResponse(200, {
-      totalVideos,
-      totalSubscribers,
-      totalViews,
-      totalLikes,
-    })
+    new ApiResponse(
+      200,
+      {
+        totalVideos,
+        totalSubscribers,
+        totalViews,
+        totalLikes,
+      },
+      "Channel Stats fetched successfully"
+    )
   );
 });
 
 const getChannelVideos = asyncHandler(async (req, res) => {
   // TODO: Get all the videos uploaded by the channel
+  const videos = await Video.find({ owner: req.user._id })
+    .sort({ createdAt: -1 })
+    .select("title thumbnail views createdAt duration isPublished");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, videos, "Channel Videos fetched successfully"));
 });
 
 export { getChannelStats, getChannelVideos };
