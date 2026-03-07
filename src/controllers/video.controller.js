@@ -1,6 +1,5 @@
 import mongoose, { isValidObjectId } from "mongoose";
 import { Video } from "../models/video.model.js";
-import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -137,11 +136,14 @@ const getVideoById = asyncHandler(async (req, res) => {
   if (!videoId) {
     throw new ApiError(400, "Video Id is missing");
   }
-  const video = await Video.findOneAndUpdate(videoId, {
-    $inc: {
-      views: 1,
-    },
-  });
+  const video = await Video.findOneAndUpdate(
+    { _id: videoId },
+    {
+      $inc: {
+        views: 1,
+      },
+    }
+  );
 
   if (!video) {
     throw new ApiError(400, "Video does not exist");
@@ -169,18 +171,27 @@ const updateVideo = asyncHandler(async (req, res) => {
   if (!videoId) {
     throw new ApiError(400, "Video Id is required");
   }
+
   const { title, description } = req.body;
   // both title and description is required
   if (!(title && description)) {
     throw new ApiError(401, "All fields are required");
   }
+
+  // find if video exists
+  const existedVideo = await Video.findById(videoId);
+  // check if the owner and the user both are equal then and then we will go further
+  if (existedVideo.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(400, "You do not have permission to update this video");
+  }
+
+  // if we get it upload the thumbnail file to cloudinary
   // getting thumbnail using multer middleware
   const thubmnailLocalPath = req.file?.path;
   // if we did not get thumbnail then throw error
   if (!thubmnailLocalPath) {
     throw new ApiError(400, "Thumbnail file is required");
   }
-  // if we get it upload the thumbnail file to cloudinary
   const thumbnail = await uploadOnCloudinary(thubmnailLocalPath);
   // if we did not get the url after uploading then we throw error
   if (!thumbnail.url) {
@@ -188,7 +199,6 @@ const updateVideo = asyncHandler(async (req, res) => {
   }
 
   // after successfully uploading delete the old image
-  const existedVideo = await Video.findById(videoId);
   const oldThumbnailUrl = existedVideo.thumbnail;
   const url = new URL(oldThumbnailUrl);
   const path = url.pathname;
@@ -199,9 +209,9 @@ const updateVideo = asyncHandler(async (req, res) => {
   // console.log(public_id);
 
   const deletedResponse = await deleteOnCloudinary(public_id, "image");
-  // if (deletedResponse?.result === "ok") {
-  //   console.log("Old thumbnail file deleted successfully");
-  // }
+  if (deletedResponse?.result === "ok") {
+    console.log("Old thumbnail file deleted successfully");
+  }
 
   // update the new thumbnail, title and description in the db
   const video = await Video.findOneAndUpdate(
@@ -237,9 +247,10 @@ const deleteVideo = asyncHandler(async (req, res) => {
   if (!videoId) {
     throw new ApiError(400, "Video Id is required");
   }
-  const video = await Video.findById(videoId);
+
+  const video = await Video.findOne({ _id: videoId, owner: req.user?._id });
   if (!video) {
-    throw new ApiError(400, "Video is missing");
+    throw new ApiError(404, "Video does not exist");
   }
   const videoUrl = video.videoFile;
   const url = new URL(videoUrl);
@@ -247,22 +258,22 @@ const deleteVideo = asyncHandler(async (req, res) => {
   const publicIdWithExtension = path.split("/").pop();
   const public_id = publicIdWithExtension.split(".")[0];
   // console.log(public_id)
+
+  // delete on cloudinary
   const deletedResponse = await deleteOnCloudinary(public_id, "video");
   if (deletedResponse?.result === "ok") {
     console.log("Old video file deleted successfully");
   }
+
   // delete the whole video in the db
-  const deletedVideo = await Video.findOneAndDelete({
+  await Video.findOneAndDelete({
     _id: videoId,
     owner: req.user?._id,
   });
-  if (!deletedVideo) {
-    throw new ApiError(400, "Error while deleting the video");
-  }
 
   return res
     .status(200)
-    .json(new ApiResponse(200, {}, "Old video deleted successfully"));
+    .json(new ApiResponse(200, {}, "Video deleted successfully"));
 });
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
@@ -271,9 +282,9 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Video Id is required");
   }
 
-  const video = await Video.findById(videoId);
+  const video = await Video.findOne({ _id: videoId, owner: req.user._id });
   if (!video) {
-    throw new ApiError(400, "Video is missing");
+    throw new ApiError(400, "Video does not exist");
   }
   video.isPublished = !video.isPublished;
   video.save({ validateBeforeSave: false });
