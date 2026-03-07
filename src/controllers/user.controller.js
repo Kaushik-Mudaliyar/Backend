@@ -51,7 +51,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if (existedUser) {
     throw new ApiError(409, "User with email or username already exists");
   }
-  console.log(req.files);
+  // console.log(req.files);
 
   const avatarLocalPath = req.files?.avatar[0]?.path;
   // const coverImageLocalPath = req.files?.coverImage[0]?.path;
@@ -175,7 +175,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     secure: true,
   };
 
-  res
+  return res
     .status(200)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
@@ -293,7 +293,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   const public_id = pathArray[5].split(".")[0];
   // console.log(public_id);
 
-  const deletedResponse = await deleteOnCloudinary(String(public_id,"image"));
+  const deletedResponse = await deleteOnCloudinary(String(public_id), "image");
   // if (deletedResponse?.result === "ok") {
   //   console.log("Old avatar deleted successfully");
   // }
@@ -328,17 +328,22 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 
   // TODO : delete old image - assignment
   const existedUser = await User.findById(req.user?._id);
-  const oldCoverImageUrl = existedUser.coverImage;
-  const url = new URL(oldCoverImageUrl);
-  const path = url.pathname;
-  const pathArray = path.split("/");
-  const public_id = pathArray[5].split(".")[0];
-  // console.log(public_id);
+  if (existedUser.coverImage !== "") {
+    const oldCoverImageUrl = existedUser.coverImage;
+    const url = new URL(oldCoverImageUrl);
+    const path = url.pathname;
+    const pathArray = path.split("/");
+    const public_id = pathArray[5].split(".")[0];
+    // console.log(public_id);
 
-  const deletedResponse = await deleteOnCloudinary(String(public_id));
-  // if (deletedResponse?.result === "ok") {
-  //   console.log("Old avatar deleted successfully");
-  // }
+    const deletedResponse = await deleteOnCloudinary(
+      String(public_id),
+      "image"
+    );
+    // if (deletedResponse?.result === "ok") {
+    //   console.log("Old avatar deleted successfully");
+    // }
+  }
 
   // update the new coverImage to the database
   const user = await User.findByIdAndUpdate(
@@ -423,7 +428,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
       },
     },
   ]);
-  console.log(channel);
+  // console.log(channel);
 
   if (!channel?.length) {
     throw new ApiError(404, "Channel does not exist");
